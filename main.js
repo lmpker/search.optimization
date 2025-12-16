@@ -39,7 +39,7 @@
         {
             name: 'bing',
             enabled: true,
-            icon: 'https://www.google.com/s2/favicons?domain=bing.com&sz=64',
+            icon: 'https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/5a/fe/e8/5afee859-edce-0ca0-ccef-f5777c11dc5b/AppIcon-0-1x_U007epad-0-1-0-0-85-220-0.png/9999x9999-75.webp',
             url: 'https://cn.bing.com/search?q=',
             domain: 'bing.com'
         },
@@ -81,7 +81,7 @@
         {
             name: 'xiaohongshu',
             enabled: true,
-            icon: 'https://www.google.com/s2/favicons?domain=xiaohongshu.com&sz=64',
+            icon: 'https://is1-ssl.mzstatic.com/image/thumb/PurpleSource211/v4/37/b1/29/37b129cf-f651-6dec-5341-d44a5ee61cb2/Placeholder.mill/400x400bb-75.webp',
             url: 'https://www.xiaohongshu.com/search_result?keyword=',
             domain: 'xiaohongshu.com'
         },
