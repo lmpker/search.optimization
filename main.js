@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         聚合搜索
-// @version      1.6
+// @version      1.9
 // @description  快速切换搜索引擎，支持启用/禁用、SVG 图标、拖拽排序
 // @author       Never7 (Modified)
 // @license      MIT
@@ -8,6 +8,8 @@
 // @match        *://www.google.com/*
 // @match        *://cn.bing.com/*
 // @match        *://duckduckgo.com/*
+// @updateURL    https://raw.githubusercontent.com/lmpker/search.optimization/refs/heads/main/main.js
+// @downloadURL  https://raw.githubusercontent.com/lmpker/search.optimization/refs/heads/main/main.js
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==
@@ -19,6 +21,9 @@
     const DEBOUNCE_DELAY = 500;
     const STORAGE_KEY = 'aggregated_search_engines_config_v2'; // 升级 Key 以避免旧数据冲突
     const STORAGE_KEY_MODAL_SIZE = 'aggregated_search_modal_size_v1';
+
+    // 默认图标加载失败时的通用 SVG (灰色圆圈)
+    const FALLBACK_ICON_SVG = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNjY2MiLz48L3N2Zz4=';
 
     // 默认搜索引擎列表
     const DEFAULT_ENGINES = [
@@ -103,7 +108,6 @@
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                // 数据迁移：确保所有项都有 enabled 属性
                 engines = parsed.map(e => ({
                     enabled: typeof e.enabled !== 'undefined' ? e.enabled : true,
                     ...e
@@ -120,7 +124,6 @@
     // 保存配置
     function saveEngines() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(engines));
-        // 保存后重新渲染主界面
         createSwitcher(true);
     }
 
@@ -137,14 +140,51 @@
         return new URLSearchParams(window.location.search);
     }
 
-    // 智能转换域名为 Favicon API 地址
     function processIconUrl(input) {
         input = input.trim();
-        // 如果不包含 http 且看起来像域名，或者直接就是域名，则通过 API 转换
         if (!input.startsWith('http') && !input.startsWith('data:') && input.includes('.')) {
             return `https://www.google.com/s2/favicons?domain=${input}&sz=64`;
         }
         return input;
+    }
+
+    // 辅助：从 Google Favicon URL 或其他 URL 中尝试提取域名
+    function extractDomainFromUrl(url, fallbackDomain) {
+        if (fallbackDomain) return fallbackDomain;
+        try {
+            // 尝试从 google favicon url 提取
+            if (url.includes('domain=')) {
+                return url.split('domain=')[1].split('&')[0];
+            }
+            // 尝试作为普通 URL 提取 host
+            if (url.startsWith('http')) {
+                return new URL(url).hostname;
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    // 处理图标加载错误 (CSP 兼容处理)
+    function handleIconError(img, engine) {
+        // 防止无限循环
+        if (img.dataset.hasFallback) {
+            img.src = FALLBACK_ICON_SVG;
+            return;
+        }
+        img.dataset.hasFallback = 'true';
+
+        const isDuckDuckGo = window.location.hostname.includes('duckduckgo.com');
+        
+        // 如果在 DuckDuckGo 上，尝试使用 DDG 的图标服务 (绕过 CSP)
+        if (isDuckDuckGo) {
+            const domain = extractDomainFromUrl(engine.icon, engine.domain);
+            if (domain) {
+                img.src = `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+                return;
+            }
+        }
+        
+        img.src = FALLBACK_ICON_SVG;
     }
 
     // 获取当前页面对应的搜索引擎对象
@@ -153,13 +193,11 @@
         return engines.find(e => host.includes(e.domain || 'NEVER_MATCH')) || null;
     }
 
-    // 获取通用查询参数
     function getCurrentQuery() {
         const params = getURLParams();
         return params.get('wd') || params.get('q') || params.get('keyword') || params.get('query') || params.get('text') || '';
     }
 
-    // 切换引擎
     function switchEngine(engineUrl) {
         const query = getCurrentQuery();
         if (query) {
@@ -183,7 +221,6 @@
         
         const shadow = modal.attachShadow({ mode: 'open' });
         
-        // 读取记忆的大小
         let savedWidth = '550px';
         let savedHeight = '500px';
         try {
@@ -261,7 +298,6 @@
             }
             .drag-handle:active { cursor: grabbing; color: #666; }
 
-            /* 复选框样式 */
             .chk-enable {
                 margin: 0 8px 0 0;
                 width: 16px; height: 16px;
@@ -313,7 +349,6 @@
         const container = document.createElement('div');
         container.className = 'container';
 
-        // 头部
         container.innerHTML = `
             <div class="header">
                 <h3>搜索引擎设置 (勾选以启用)</h3>
@@ -325,26 +360,24 @@
                     <button class="btn btn-add">＋ 新增</button>
                     <button class="btn btn-reset">重置默认</button>
                 </div>
-                <button class="btn btn-save">保存生效</button>
+                <button class="btn btn-save">保存</button>
             </div>
         `;
 
         const listBody = container.querySelector('#list-body');
 
-        // 渲染列表项
         function renderList() {
             listBody.innerHTML = '';
             engines.forEach((engine, index) => {
                 const row = document.createElement('div');
                 row.className = `row ${engine.enabled ? '' : 'disabled'}`;
                 row.dataset.index = index;
-                row.setAttribute('draggable', 'false'); // 默认不可拖动，只有按住 handle 时可拖动
+                row.setAttribute('draggable', 'false');
 
-                // HTML 结构
                 row.innerHTML = `
                     <div class="drag-handle" title="按住拖动排序">☰</div>
                     <input type="checkbox" class="chk-enable" title="启用/禁用" ${engine.enabled ? 'checked' : ''}>
-                    <img src="${engine.icon}" class="icon-preview" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNjY2MiLz48L3N2Zz4='">
+                    <img class="icon-preview">
                     <div class="input-group">
                         <input type="text" class="input-icon" value="${engine.icon}" placeholder="图标链接或域名">
                         <input type="text" class="input-url" value="${engine.url}" placeholder="搜索URL">
@@ -352,7 +385,11 @@
                     <button class="btn-del">删除</button>
                 `;
 
-                // --- 启用/禁用逻辑 ---
+                // 设置图片源和错误处理
+                const img = row.querySelector('.icon-preview');
+                img.src = engine.icon;
+                img.onerror = () => handleIconError(img, engine);
+
                 const checkbox = row.querySelector('.chk-enable');
                 checkbox.addEventListener('change', (e) => {
                     engine.enabled = e.target.checked;
@@ -363,7 +400,6 @@
                     }
                 });
 
-                // --- 拖动排序逻辑 ---
                 const handle = row.querySelector('.drag-handle');
                 handle.addEventListener('mousedown', () => row.setAttribute('draggable', 'true'));
                 row.addEventListener('mouseup', () => row.setAttribute('draggable', 'false'));
@@ -404,13 +440,14 @@
                     }
                 });
 
-                // --- 输入框逻辑 ---
                 const inputIcon = row.querySelector('.input-icon');
                 inputIcon.addEventListener('change', (e) => {
                     const newVal = processIconUrl(e.target.value);
                     engine.icon = newVal;
                     if (newVal !== e.target.value) e.target.value = newVal;
-                    row.querySelector('.icon-preview').src = newVal;
+                    const imgPreview = row.querySelector('.icon-preview');
+                    imgPreview.dataset.hasFallback = ''; // 重置 fallback 标记
+                    imgPreview.src = newVal;
                 });
                 inputIcon.addEventListener('mousedown', e => e.stopPropagation());
 
@@ -420,7 +457,6 @@
                 });
                 inputUrl.addEventListener('mousedown', e => e.stopPropagation());
 
-                // --- 删除逻辑 ---
                 row.querySelector('.btn-del').addEventListener('click', () => {
                     if (confirm('确定删除这个搜索引擎吗？')) {
                         engines.splice(index, 1);
@@ -434,7 +470,6 @@
 
         renderList();
 
-        // 监听容器大小变化
         const resizeObserver = new ResizeObserver(entries => {
             for (const entry of entries) {
                 if (container._saveTimeout) clearTimeout(container._saveTimeout);
@@ -571,7 +606,7 @@
         settingBtn.addEventListener('click', openSettings);
         frag.appendChild(settingBtn);
 
-        // 2. 添加引擎图标 (只添加 enabled: true 的)
+        // 2. 添加引擎图标
         engines.filter(e => e.enabled).forEach(engine => {
             const button = document.createElement('button');
             button.className = 'icon';
@@ -579,9 +614,8 @@
             
             const img = document.createElement('img');
             img.src = engine.icon;
-            img.onerror = function() {
-                this.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNjY2MiLz48L3N2Zz4=';
-            };
+            // 增强的错误处理：在 DDG 上尝试使用 DDG 图标服务
+            img.onerror = () => handleIconError(img, engine);
             
             button.appendChild(img);
             button.addEventListener('click', () => switchEngine(engine.url));
