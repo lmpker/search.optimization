@@ -8,7 +8,6 @@
 // @match        *://www.google.com/*
 // @match        *://cn.bing.com/*
 // @match        *://duckduckgo.com/*
-// @match        *://www.duckduckgo.com/*
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==
