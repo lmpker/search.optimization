@@ -4,6 +4,7 @@
 // @description  快速切换搜索引擎，支持启用/禁用、SVG 图标、拖拽排序
 // @author       Never7 (Modified)
 // @license      MIT
+// @homepage     https://github.com/lmpker/search.optimization
 // @match        *://www.baidu.com/*
 // @match        *://www.google.com/*
 // @match        *://cn.bing.com/*
