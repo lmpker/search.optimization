@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         聚合搜索
-// @version      1.9
+// @version      1.9.1
 // @description  快速切换搜索引擎，支持启用/禁用、SVG 图标、拖拽排序
 // @author       Never7 (Modified)
 // @license      MIT
